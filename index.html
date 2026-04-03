@@ -373,6 +373,72 @@
           touch-action: none;
         }
       }
+
+      /* ── Portrait orientation overlay ───────────────────────────────────── */
+      #orientation-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: #0f172a;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+      }
+      @media (orientation: portrait) and (pointer: coarse) {
+        #orientation-overlay { display: flex; }
+      }
+      .orient-phone {
+        width: 48px;
+        height: 82px;
+        border: 3px solid #bffd11;
+        border-radius: 10px;
+        position: relative;
+        animation: phone-tilt 1.8s ease-in-out infinite;
+      }
+      .orient-phone::before {
+        content: '';
+        position: absolute;
+        bottom: 7px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 18px;
+        height: 3px;
+        background: #bffd11;
+        border-radius: 2px;
+      }
+      .orient-phone::after {
+        content: '';
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 10px;
+        height: 10px;
+        background: #bffd11;
+        border-radius: 50%;
+        opacity: 0.3;
+      }
+      @keyframes phone-tilt {
+        0%,  25% { transform: rotate(0deg);  }
+        65%, 90% { transform: rotate(90deg); }
+        100%     { transform: rotate(0deg);  }
+      }
+      .orient-title {
+        font-family: 'Inter', sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        color: #bffd11;
+        letter-spacing: 0.12em;
+        margin: 0;
+      }
+      .orient-sub {
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        color: #64748b;
+        margin: 0;
+      }
     </style>
   </head>
   <body>
@@ -399,6 +465,12 @@
         <div class="tv-knob"></div>
       </div>
       <div class="tv-shadow"></div>
+    </div>
+
+    <div id="orientation-overlay">
+      <div class="orient-phone"></div>
+      <p class="orient-title">ROTATE TO PLAY</p>
+      <p class="orient-sub">Simmie needs landscape mode</p>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

@@ -132,9 +132,21 @@ export default class SoundtrackScene extends Phaser.Scene {
       color: '#64748b',
     }).setOrigin(0.5);
 
-    this.progressBarBg = this.add.rectangle(cx, barY + 30, listW, 6, 0x1e293b)
+    this.progressBarBg = this.add.rectangle(cx, barY + 30, listW - 120, 6, 0x1e293b)
       .setStrokeStyle(1, 0x334155);
     this.progressBarGfx = this.add.graphics();
+
+    // Elapsed / total time labels flanking the progress bar
+    this.trackDurationTexts.push(
+      this.add.text(cx - (listW - 120) / 2 - 8, barY + 30, '0:00', {
+        fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#475569',
+      }).setOrigin(1, 0.5),
+    );
+    this.trackDurationTexts.push(
+      this.add.text(cx + (listW - 120) / 2 + 8, barY + 30, '0:00', {
+        fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#475569',
+      }).setOrigin(0, 0.5),
+    );
 
     // ── Controls hint ────────────────────────────────────────────────────────
     this.add.text(cx, barY + 52, 'Click a track to play · Click again to pause', {
@@ -158,9 +170,9 @@ export default class SoundtrackScene extends Phaser.Scene {
 
   update() {
     if (!this.currentSound || !this.currentSound.isPlaying) return;
-    const sound = this.currentSound as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound;
-    const seek     = (sound as Phaser.Sound.WebAudioSound).seek ?? 0;
-    const duration = (sound as Phaser.Sound.WebAudioSound).duration ?? 1;
+    const sound    = this.currentSound as Phaser.Sound.WebAudioSound;
+    const seek     = sound.seek     ?? 0;
+    const duration = sound.duration ?? 0;
     const frac     = duration > 0 ? Math.min(1, seek / duration) : 0;
     const barW     = this.progressBarBg.width;
     const barX     = this.progressBarBg.x - barW / 2;
@@ -168,6 +180,17 @@ export default class SoundtrackScene extends Phaser.Scene {
     this.progressBarGfx.clear();
     this.progressBarGfx.fillStyle(LIME, 0.8);
     this.progressBarGfx.fillRoundedRect(barX, barY, Math.round(barW * frac), 6, 3);
+
+    // Update time labels
+    if (this.trackDurationTexts.length >= 2) {
+      this.trackDurationTexts[0].setText(this.fmtTime(seek));
+      this.trackDurationTexts[1].setText(this.fmtTime(duration));
+    }
+  }
+
+  private fmtTime(sec: number): string {
+    const s = Math.floor(sec);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 
   private selectTrack(idx: number) {

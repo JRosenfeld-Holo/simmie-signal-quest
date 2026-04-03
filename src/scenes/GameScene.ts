@@ -53,6 +53,14 @@ export default class GameScene extends Phaser.Scene {
   private touchRight          = false;
   private touchJumpTriggered  = false;
 
+  // ── Respawn / hints ───────────────────────────────────────────────────────
+  private respawnX   = 120;
+  private respawnY   = 480;
+  private hintShown  = false;
+
+  // ── Pause handler ref (to avoid stale listeners) ──────────────────────────
+  private pauseMenuHandler: (() => void) | null = null;
+
   // ── Player state ──────────────────────────────────────────────────────────
   private score        = 0;
   private jumpCount    = 0;
@@ -136,6 +144,10 @@ export default class GameScene extends Phaser.Scene {
     this.touchLeft  = false;
     this.touchRight = false;
     this.touchJumpTriggered = false;
+    this.respawnX   = (data as {respawnX?: number})?.respawnX ?? 120;
+    this.respawnY   = (data as {respawnY?: number})?.respawnY ?? 480;
+    this.hintShown  = false;
+    this.pauseMenuHandler = null;
     this.boss = null;
     this.bossHP = 5;
     this.bossPhase = 0;
@@ -211,6 +223,9 @@ export default class GameScene extends Phaser.Scene {
 
     // ── Touch controls (mobile/tablet only) ─────────────────────────────────
     if (this.sys.game.device.input.touch) this.buildTouchControls();
+
+    // ── First-play hints (Level 1 only) ──────────────────────────────────────
+    if (this.currentLevel === 0) this.scheduleFirstPlayHints();
 
     // ── Build boss if Level 5 ────────────────────────────────────────────────
     if (this.currentLevel === 4) this.buildBoss();
@@ -695,7 +710,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private buildPlayer() {
-    this.player = this.physics.add.sprite(120, 480, 'simmie');
+    this.player = this.physics.add.sprite(this.respawnX, this.respawnY, 'simmie');
     this.player.setCollideWorldBounds(true);
     this.player.setDragX(DRAG_X);
     this.player.setDepth(8);
@@ -860,6 +875,29 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  private scheduleFirstPlayHints() {
+    const showHint = (msg: string, delay: number, duration = 2800) => {
+      this.time.delayedCall(delay, () => {
+        if (this.gameOver || this.victory || this.hintShown) return;
+        this.hintShown = true;
+        const cx = this.cameras.main.width / 2;
+        const bg = this.add.rectangle(cx, this.cameras.main.height - 58, 560, 36, DARK, 0.88)
+          .setScrollFactor(0).setDepth(22).setStrokeStyle(1, LIME, 0.3);
+        const txt = this.add.text(cx, this.cameras.main.height - 58, msg, {
+          fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#bffd11',
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(23);
+        this.time.delayedCall(duration, () => {
+          this.tweens.add({ targets: [bg, txt], alpha: 0, duration: 600,
+            onComplete: () => { bg.destroy(); txt.destroy(); this.hintShown = false; } });
+        });
+      });
+    };
+
+    showHint('↑ Jump on top of bugs and fall to STOMP them  (+50 MB!)', 5000);
+    showHint('Touch the beacon checkpoints to fully restore your signal!', 13000);
+    showHint('Grab the glowing SIM cards — 10s of speed & invincibility!', 22000);
+  }
+
   private buildTouchControls() {
     const W    = this.cameras.main.width;
     const H    = this.cameras.main.height;
@@ -902,6 +940,19 @@ export default class GameScene extends Phaser.Scene {
       () => { this.touchJumpTriggered = true; },
       () => {},
     );
+
+    // Pause — small button top-left of HUD
+    const pauseSize = 44;
+    const pauseBtn = this.add.rectangle(pauseSize / 2 + pad, pauseSize / 2 + pad, pauseSize, pauseSize, DARK, idleAlpha)
+      .setStrokeStyle(1, LIME, 0.4)
+      .setScrollFactor(0).setDepth(depth)
+      .setInteractive();
+    this.add.text(pauseSize / 2 + pad, pauseSize / 2 + pad, '⏸', {
+      fontFamily: 'Inter, sans-serif', fontSize: '18px',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 1);
+    pauseBtn.on('pointerdown', () => {
+      if (!this.gameOver && !this.victory) this.togglePause();
+    });
   }
 
   private buildUI() {
@@ -1015,8 +1066,13 @@ export default class GameScene extends Phaser.Scene {
         fontFamily: 'Inter, sans-serif', fontSize: '16px', color: '#94a3b8',
       }).setOrigin(0.5);
       this.pauseOverlay = this.add.container(0, 0, [bg, ttl, sub]).setScrollFactor(0).setDepth(30);
-      this.input.keyboard!.once('keydown-M', () => this.scene.start('MenuScene'));
+      this.pauseMenuHandler = () => this.scene.start('MenuScene');
+      this.input.keyboard!.once('keydown-M', this.pauseMenuHandler);
     } else {
+      if (this.pauseMenuHandler) {
+        this.input.keyboard!.off('keydown-M', this.pauseMenuHandler);
+        this.pauseMenuHandler = null;
+      }
       this.physics.world.resume();
       this.tweens.resumeAll();
       this.pauseOverlay?.destroy();
@@ -1239,6 +1295,21 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
+    // Signal-lost visual feedback
+    const sigLbl = this.add.text(74, 62, '− SIGNAL', {
+      fontFamily: 'Inter, sans-serif', fontSize: '13px', fontStyle: '700',
+      color: '#ff3b3b', stroke: '#0f172a', strokeThickness: 2,
+    }).setScrollFactor(0).setDepth(22).setAlpha(1);
+    this.tweens.add({
+      targets: sigLbl, x: 100, alpha: 0, duration: 700, ease: 'Power2',
+      onComplete: () => sigLbl.destroy(),
+    });
+    this.tweens.add({
+      targets: this.signalBarGfx, alpha: 0.15,
+      duration: 100, yoyo: true, repeat: 2,
+      onComplete: () => this.signalBarGfx.setAlpha(1),
+    });
+
     // Damage flash invincibility (1.5 s)
     this.invincible = true;
     const flashTween = this.tweens.add({
@@ -1365,6 +1436,9 @@ export default class GameScene extends Phaser.Scene {
       targets: cp, alpha: { from: 1, to: 0.7 },
       duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
     });
+
+    this.respawnX = cp.x;
+    this.respawnY = cp.y + 60;
 
     this.signalBars = this.maxBars;
     this.refreshSignalBarsUI();
@@ -1495,6 +1569,8 @@ export default class GameScene extends Phaser.Scene {
     if (isLastLevel) {
       // Final victory — hand off to EndGameScene
       SaveService.addPackets(this.score);
+      SaveService.saveLastRun(this.score);
+      SaveService.saveProgress(0); // reset resume level after full game completion
       void SaveService.submitScore('Player', this.score);
 
       this.time.delayedCall(800, () => {
@@ -1505,21 +1581,22 @@ export default class GameScene extends Phaser.Scene {
       // Level complete — advance
       const nextLevel = this.currentLevel + 1;
       const nextName = LEVELS[nextLevel].name;
+      SaveService.saveProgress(nextLevel);
 
       this.add.rectangle(cx, cy, 760, 280, NAVY, 0.93).setScrollFactor(0).setDepth(25);
-      this.add.text(cx, cy - 75, `LEVEL ${this.currentLevel + 1} COMPLETE!`, {
+      this.add.text(cx, cy - 80, `LEVEL ${this.currentLevel + 1} COMPLETE!`, {
         fontFamily: 'Inter, sans-serif', fontSize: '44px', fontStyle: '700',
         color: '#bffd11', stroke: '#0f172a', strokeThickness: 4,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(26);
-      this.add.text(cx, cy - 10, `${this.score} MB uploaded so far`, {
+      this.add.text(cx, cy - 20, `${this.score} MB uploaded so far`, {
         fontFamily: 'Inter, sans-serif', fontSize: '20px', color: '#ffffff',
       }).setOrigin(0.5).setScrollFactor(0).setDepth(26);
-      this.add.text(cx, cy + 30, `Next: LEVEL ${nextLevel + 1} — ${nextName}`, {
+      this.add.text(cx, cy + 18, `Next: LEVEL ${nextLevel + 1} — ${nextName}`, {
         fontFamily: 'Inter, sans-serif', fontSize: '18px', color: '#94a3b8',
       }).setOrigin(0.5).setScrollFactor(0).setDepth(26);
-      this.add.text(cx, cy + 80, 'SPACE  →  next level     M  →  main menu', {
-        fontFamily: 'Inter, sans-serif', fontSize: '15px', color: '#64748b',
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(26);
+
+      this.makeModalBtn(cx - 150, cy + 78, '▶  NEXT LEVEL', LIME,  () => this.scene.restart({ level: nextLevel, score: this.score }));
+      this.makeModalBtn(cx + 150, cy + 78, '⌂  MAIN MENU',  SLATE, () => this.scene.start('MenuScene'));
 
       this.input.keyboard!.once('keydown-SPACE', () => this.scene.restart({ level: nextLevel, score: this.score }));
       this.input.keyboard!.once('keydown-M',     () => this.scene.start('MenuScene'));
@@ -1543,20 +1620,41 @@ export default class GameScene extends Phaser.Scene {
     const cy = this.cameras.main.height / 2;
 
     const packetsThisRun = this.score - this.carryScore;
-    this.add.rectangle(cx, cy, 640, 260, NAVY, 0.93).setScrollFactor(0).setDepth(25);
-    this.add.text(cx, cy - 68, 'CONNECTION\nDROPPED!', {
+    SaveService.saveLastRun(packetsThisRun);
+    SaveService.saveProgress(this.currentLevel);
+
+    this.add.rectangle(cx, cy, 640, 280, NAVY, 0.93).setScrollFactor(0).setDepth(25);
+    this.add.text(cx, cy - 80, 'CONNECTION\nDROPPED!', {
       fontFamily: 'Inter, sans-serif', fontSize: '50px', fontStyle: '700',
       color: '#ff3b3b', stroke: '#0f172a', strokeThickness: 4, align: 'center',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(26);
-    this.add.text(cx, cy + 18, `${packetsThisRun} MB collected  ·  ${this.score} MB total`, {
+    this.add.text(cx, cy + 8, `${packetsThisRun} MB collected  ·  ${this.score} MB total`, {
       fontFamily: 'Inter, sans-serif', fontSize: '15px', color: '#bffd11',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(26);
-    this.add.text(cx, cy + 68, 'SPACE  →  retry     M  →  main menu', {
-      fontFamily: 'Inter, sans-serif', fontSize: '16px', color: '#94a3b8',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(26);
 
-    this.input.keyboard!.once('keydown-SPACE', () => this.scene.restart({ level: this.currentLevel }));
+    // Tappable buttons (work on both touch and keyboard)
+    this.makeModalBtn(cx - 185, cy + 68, '↺  RETRY',   RED,   () => this.scene.restart({ level: this.currentLevel, respawnX: this.respawnX, respawnY: this.respawnY }));
+    this.makeModalBtn(cx,        cy + 68, '⚙  UPGRADE', SLATE, () => this.scene.start('ShopScene'));
+    this.makeModalBtn(cx + 185,  cy + 68, '⌂  MENU',    SLATE, () => this.scene.start('MenuScene'));
+
+    this.input.keyboard!.once('keydown-SPACE', () => this.scene.restart({ level: this.currentLevel, respawnX: this.respawnX, respawnY: this.respawnY }));
     this.input.keyboard!.once('keydown-M',     () => this.scene.start('MenuScene'));
+  }
+
+  private makeModalBtn(x: number, y: number, label: string, borderCol: number, cb: () => void) {
+    const bg = this.add.rectangle(x, y, 170, 46, DARK)
+      .setStrokeStyle(2, borderCol, 0.8)
+      .setScrollFactor(0).setDepth(27)
+      .setInteractive({ useHandCursor: true });
+    const txt = this.add.text(x, y, label, {
+      fontFamily: 'Inter, sans-serif', fontSize: '15px', fontStyle: '600', color: '#ffffff',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(28);
+    bg.on('pointerover', () => { bg.setFillStyle(0x2d3f55); txt.setColor('#bffd11'); });
+    bg.on('pointerout',  () => { bg.setFillStyle(DARK);     txt.setColor('#ffffff'); });
+    bg.on('pointerdown', () => {
+      this.tweens.add({ targets: bg, scaleX: 0.95, scaleY: 0.95, duration: 60, yoyo: true });
+      this.time.delayedCall(80, cb);
+    });
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -1748,6 +1846,24 @@ export default class GameScene extends Phaser.Scene {
       this.boss.setTint(0xff0000);
       this.time.delayedCall(400, () => { this.boss?.clearTint(); });
       this.cameras.main.shake(250, 0.012);
+      this.cameras.main.flash(200, 255, 0, 60, false);
+
+      // Phase warning banner
+      const phaseLabel = newPhase === 1 ? '⚠  PHASE 2 — INCOMING!' : '☠  FINAL PHASE';
+      const phaseColor = newPhase === 1 ? '#ffaa00' : '#ff003c';
+      const cx = this.cameras.main.width / 2;
+      const cy = this.cameras.main.height / 2;
+      const warn2 = this.add.text(cx, cy - 30, phaseLabel, {
+        fontFamily: 'Inter, sans-serif', fontSize: '32px', fontStyle: '700',
+        color: phaseColor, stroke: '#0f172a', strokeThickness: 4,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(30).setScale(0.5);
+      this.tweens.add({
+        targets: warn2, scaleX: 1, scaleY: 1, duration: 300, ease: 'Back.easeOut',
+      });
+      this.tweens.add({
+        targets: warn2, alpha: 0, delay: 1800, duration: 500,
+        onComplete: () => warn2.destroy(),
+      });
     }
   }
 

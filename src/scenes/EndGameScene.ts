@@ -128,11 +128,15 @@ export default class EndGameScene extends Phaser.Scene {
 
     // ── Buttons ──────────────────────────────────────────────────────────────
     this.time.delayedCall(1600, () => {
-      this.makeButton(cx - 130, H - 58, '▶  PLAY AGAIN', () => {
+      this.makeButton(cx - 190, H - 58, '▶  LEVEL 1', () => {
         this.endMusic?.stop();
         this.scene.start('GameScene', { level: 0 });
       });
-      this.makeButton(cx + 130, H - 58, '⌂  MAIN MENU', () => {
+      this.makeButton(cx, H - 58, '⚔  BOSS FIGHT', () => {
+        this.endMusic?.stop();
+        this.scene.start('GameScene', { level: 4 });
+      });
+      this.makeButton(cx + 190, H - 58, '⌂  MAIN MENU', () => {
         this.endMusic?.stop();
         this.scene.start('MenuScene');
       });

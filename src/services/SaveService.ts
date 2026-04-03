@@ -18,6 +18,10 @@ export interface SaveData {
   totalPackets: number;
   upgrades: Upgrades;
   leaderboard: LeaderboardEntry[];
+  /** Level the player will resume from (0-indexed) */
+  currentLevel: number;
+  /** Packets earned in the most recent play session, shown in the menu */
+  lastRunPackets: number;
 }
 
 // ─── Upgrade shop costs ───────────────────────────────────────────────────────
@@ -37,6 +41,8 @@ function blank(): SaveData {
     totalPackets: 0,
     upgrades: { bandwidthBoost: 0, signalAmp: false, packetSniffer: false },
     leaderboard: [],
+    currentLevel: 0,
+    lastRunPackets: 0,
   };
 }
 
@@ -55,6 +61,8 @@ export const SaveService = {
           packetSniffer:  p.upgrades?.packetSniffer  ?? false,
         },
         leaderboard: Array.isArray(p.leaderboard) ? p.leaderboard : [],
+        currentLevel:    p.currentLevel    ?? 0,
+        lastRunPackets:  p.lastRunPackets  ?? 0,
       };
     } catch {
       return blank();
@@ -98,6 +106,20 @@ export const SaveService = {
     (data.upgrades[key] as boolean) = true;
     this.save(data);
     return { ok: true, message: 'PURCHASED!' };
+  },
+
+  /** Save which level the player should resume from */
+  saveProgress(level: number): void {
+    const data = this.load();
+    data.currentLevel = level;
+    this.save(data);
+  },
+
+  /** Record how many packets were earned last run (shown in menu) */
+  saveLastRun(packets: number): void {
+    const data = this.load();
+    data.lastRunPackets = packets;
+    this.save(data);
   },
 
   /** Submit a score and keep top-10 sorted list */

@@ -82,10 +82,20 @@ export default class MenuScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.tweens.add({ targets: balance, alpha: { from: 0.5, to: 1 }, duration: 1000, yoyo: true, repeat: -1 });
 
+    // Last-run earnings
+    if (save.lastRunPackets > 0) {
+      this.add.text(cx, TOP + 308, `+${save.lastRunPackets} MB last run`, {
+        fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#bffd11',
+      }).setOrigin(0.5).setAlpha(0.7);
+    }
+
     // ── Buttons (4 × 54px + 10px gaps) ────────────────────────────────────────
     const btnStart = TOP + 318;
     const btnStep  = 64;
-    this.makeButton(cx, btnStart,              '▶  PLAY GAME',   () => this.scene.start('GameScene'));
+    const resumeLabel = save.currentLevel > 0
+      ? `▶  RESUME  (LVL ${save.currentLevel + 1})`
+      : '▶  PLAY GAME';
+    this.makeButton(cx, btnStart, resumeLabel, () => this.scene.start('GameScene', { level: save.currentLevel }));
     this.makeButton(cx, btnStart + btnStep,     '🛒  DATA SHOP',   () => this.scene.start('ShopScene'));
     this.makeButton(cx, btnStart + btnStep * 2, '🏆  LEADERBOARD', () => this.scene.start('LeaderboardScene'));
     this.makeButton(cx, btnStart + btnStep * 3, '🎵  SOUNDTRACK',  () => this.scene.start('SoundtrackScene'));
