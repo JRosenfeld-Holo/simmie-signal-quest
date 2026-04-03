@@ -53,9 +53,7 @@ export default class GameScene extends Phaser.Scene {
   private touchRight          = false;
   private touchJumpTriggered  = false;
 
-  // ── Respawn / hints ───────────────────────────────────────────────────────
-  private respawnX   = 120;
-  private respawnY   = 480;
+  // ── Hints ────────────────────────────────────────────────────────────────
   private hintShown  = false;
 
   // ── Pause handler ref (to avoid stale listeners) ──────────────────────────
@@ -144,8 +142,6 @@ export default class GameScene extends Phaser.Scene {
     this.touchLeft  = false;
     this.touchRight = false;
     this.touchJumpTriggered = false;
-    this.respawnX   = (data as {respawnX?: number})?.respawnX ?? 120;
-    this.respawnY   = (data as {respawnY?: number})?.respawnY ?? 480;
     this.hintShown  = false;
     this.pauseMenuHandler = null;
     this.boss = null;
@@ -710,7 +706,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private buildPlayer() {
-    this.player = this.physics.add.sprite(this.respawnX, this.respawnY, 'simmie');
+    this.player = this.physics.add.sprite(120, 480, 'simmie');
     this.player.setCollideWorldBounds(true);
     this.player.setDragX(DRAG_X);
     this.player.setDepth(8);
@@ -1437,9 +1433,6 @@ export default class GameScene extends Phaser.Scene {
       duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
     });
 
-    this.respawnX = cp.x;
-    this.respawnY = cp.y + 60;
-
     this.signalBars = this.maxBars;
     this.refreshSignalBarsUI();
     this.cameras.main.flash(300, 191, 253, 17, false);
@@ -1633,11 +1626,11 @@ export default class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(26);
 
     // Tappable buttons (work on both touch and keyboard)
-    this.makeModalBtn(cx - 185, cy + 68, '↺  RETRY',   RED,   () => this.scene.restart({ level: this.currentLevel, respawnX: this.respawnX, respawnY: this.respawnY }));
+    this.makeModalBtn(cx - 185, cy + 68, '↺  RETRY',   RED,   () => this.scene.restart({ level: this.currentLevel }));
     this.makeModalBtn(cx,        cy + 68, '⚙  UPGRADE', SLATE, () => this.scene.start('ShopScene'));
     this.makeModalBtn(cx + 185,  cy + 68, '⌂  MENU',    SLATE, () => this.scene.start('MenuScene'));
 
-    this.input.keyboard!.once('keydown-SPACE', () => this.scene.restart({ level: this.currentLevel, respawnX: this.respawnX, respawnY: this.respawnY }));
+    this.input.keyboard!.once('keydown-SPACE', () => this.scene.restart({ level: this.currentLevel }));
     this.input.keyboard!.once('keydown-M',     () => this.scene.start('MenuScene'));
   }
 
